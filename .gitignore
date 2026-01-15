@@ -9,6 +9,8 @@ bin/
 # Test binary
 *.test
 
+.idea/
+
 # Output files
 output.pdf
 *.out
