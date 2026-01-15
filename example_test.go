@@ -9,7 +9,7 @@ import (
 	"github.com/roryphillips/pdffill"
 )
 
-//go:embed testdata/osha_bundle.pdf
+//go:embed testdata/template.pdf
 var templatePDF []byte
 
 func Example() {
@@ -19,7 +19,7 @@ func Example() {
 		log.Fatal(err)
 	}
 
-	// Fill form with data (using actual field names from the OSHA form)
+	// Fill form with data (field names depend on your PDF template)
 	formData := map[string]string{
 		"Summary of Injury/Illness City":  "Springfield",
 		"Summary of Injury/Illness State": "IL",

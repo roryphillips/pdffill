@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-//go:embed testdata/osha_bundle.pdf
+//go:embed testdata/template.pdf
 var fieldTypePDF []byte
 
 func TestFieldType_Checkbox(t *testing.T) {
@@ -254,12 +254,12 @@ func BenchmarkFill_MixedFieldTypes(b *testing.B) {
 	}
 
 	formData := map[string]string{
-		"Employee's Name 1":               "John Doe",
-		"Log of Injury/Illness Year":      "2026",
-		"Summary of Injury/Illness City":  "Springfield",
-		"Reset 1":                         "Yes",
-		"301 Gender":                      "Male",
-		"301 What Happened":               "Incident occurred in warehouse.",
+		"Employee's Name 1":              "John Doe",
+		"Log of Injury/Illness Year":     "2026",
+		"Summary of Injury/Illness City": "Springfield",
+		"Reset 1":                        "Yes",
+		"301 Gender":                     "Male",
+		"301 What Happened":              "Incident occurred in warehouse.",
 	}
 
 	b.ResetTimer()

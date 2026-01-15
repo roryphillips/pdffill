@@ -1,5 +1,8 @@
 # pdffill
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/roryphillips/pdffill.svg)](https://pkg.go.dev/github.com/roryphillips/pdffill)
+[![Go Report Card](https://goreportcard.com/badge/github.com/roryphillips/pdffill)](https://goreportcard.com/report/github.com/roryphillips/pdffill)
+
 Fast, minimal PDF form filling library using only Go stdlib.
 
 ## Features
@@ -180,7 +183,8 @@ opts.Validation = pdffill.ValidationStrict
 ```go
 // Field has MaxLen=6, value is too long
 formData := map[string]string{
-    "naics_code": "1234567890", // Error: exceeds maximum 6
+    "naics_code": "1234567890", // Error: exce
+	// eds maximum 6
 }
 
 // Or truncate automatically
@@ -386,6 +390,39 @@ BenchmarkFillWithValidation-8       2  829ms/op   7.1 MB/op  10245 allocs/op
 
 This library does exactly one thing: fill PDF form fields as fast as possible using only the Go standard library. It doesn't try to be a full-featured PDF library. For more complex PDF operations, consider other libraries.
 
+## PDF Utilities
+
+The library also includes utilities for working with PDFs:
+
+### Count Pages
+```go
+count, err := pdffill.CountPages(pdfData)
+fmt.Printf("PDF has %d pages\n", count)
+```
+
+### Extract Single Page
+```go
+page3, err := pdffill.ExtractPage(pdfData, 3)
+os.WriteFile("page3.pdf", page3, 0644)
+```
+
+### Split PDF into Pages
+```go
+pages, err := pdffill.SplitPages(pdfData)
+for i, pageData := range pages {
+    filename := fmt.Sprintf("page_%d.pdf", i+1)
+    os.WriteFile(filename, pageData, 0644)
+}
+```
+
+## Contributing
+
+Contributions are welcome! Please ensure:
+- All tests pass (`go test ./...`)
+- Code is formatted (`go fmt ./...`)
+- Documentation is updated for new features
+- Benchmarks are included for performance-critical changes
+
 ## License
 
-MIT
+MIT - see [LICENSE](LICENSE) file for details.

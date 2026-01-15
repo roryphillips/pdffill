@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-//go:embed testdata/osha_bundle.pdf
+//go:embed testdata/template.pdf
 var bundleTestPDF []byte
 
 func TestBundler_FillMultiple(t *testing.T) {

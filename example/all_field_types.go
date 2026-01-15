@@ -31,12 +31,12 @@ func main() {
 		"Summary of Injury/Illness Phone": "312-555-0100",
 
 		// === NUMBER FIELDS ===
-		"Number of days injured or ill away from work 1": "5",
+		"Number of days injured or ill away from work 1":        "5",
 		"Summary of Injury/Illness Annual avg num of employees": "250",
 
 		// === CHECKBOXES ===
-		"Reset 1": "Yes",  // Checked
-		"Reset 2": "Off",  // Unchecked
+		"Reset 1": "Yes", // Checked
+		"Reset 2": "Off", // Unchecked
 
 		// === RADIO BUTTONS ===
 		"301 Gender": "Female",

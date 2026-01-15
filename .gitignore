@@ -16,13 +16,15 @@ example/main
 .idea/
 
 # Output files
+*.out
+*.raw
 output.pdf
 bundled_output.pdf
-employee_bundle.pdf
-filled_form.pdf
-all_field_types_filled.pdf
-mixed_fields_output.pdf
-*.out
+multi_form_bundle.pdf
+
+# Example outputs
+example/*.pdf
+!example/template.pdf
 
 # Go workspace file
 go.work

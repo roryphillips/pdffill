@@ -102,9 +102,9 @@ func main() {
 	// Example 7: Multiple validation errors
 	fmt.Println("\n7. Testing multiple validation errors:")
 	formData = map[string]string{
-		"Summary of Injury/Illness NAICS": "1234567890",  // Too long
-		"All other Total":                 "100",          // Read-only
-		"NonExistentField":                "value",        // Doesn't exist
+		"Summary of Injury/Illness NAICS": "1234567890", // Too long
+		"All other Total":                 "100",        // Read-only
+		"NonExistentField":                "value",      // Doesn't exist
 	}
 
 	opts = pdffill.StrictFillOptions()
@@ -120,7 +120,7 @@ func main() {
 	// Example 8: Validate without filling
 	fmt.Println("\n8. Testing ValidateOnly:")
 	formData = map[string]string{
-		"Employee's Name 1": "Jane Smith",
+		"Employee's Name 1":          "Jane Smith",
 		"Log of Injury/Illness Year": "2026",
 	}
 

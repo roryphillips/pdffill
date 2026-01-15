@@ -6,6 +6,9 @@ import (
 )
 
 // FilledForm represents a single filled PDF form ready to be bundled.
+//
+// This is an internal type used by Bundler to track individual forms
+// before combining them into a single PDF.
 type FilledForm struct {
 	data       []byte
 	template   *Template
@@ -14,15 +17,51 @@ type FilledForm struct {
 	objMapping map[int]int // old object number -> new object number
 }
 
-// Bundler combines multiple filled forms into a single PDF.
+// Bundler combines multiple filled forms into a single PDF document.
+//
+// Use this to create a single PDF containing multiple completed forms,
+// such as creating a batch of employee records or monthly reports.
+//
+// The bundler automatically handles:
+//   - Field name deduplication (adds index prefixes: f0_, f1_, etc.)
+//   - PDF object renumbering and reference updating
+//   - Page tree merging
+//   - Cross-reference table generation
+//
+// Performance: ~100ms to bundle 3 forms (after filling).
+//
+// Example:
+//
+//	bundler := pdffill.NewBundler()
+//	bundler.FillMultiple(template,
+//		map[string]string{"name": "Alice", "dept": "Engineering"},
+//		map[string]string{"name": "Bob", "dept": "Sales"},
+//		map[string]string{"name": "Carol", "dept": "Marketing"},
+//	)
+//
+//	bundledPDF, err := bundler.Bundle()
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//
+//	os.WriteFile("employees.pdf", bundledPDF, 0644)
 type Bundler struct {
-	forms         []*FilledForm
-	nextObjNum    int
-	totalPages    int
-	pdfVersion    string
+	forms      []*FilledForm
+	nextObjNum int
+	totalPages int
+	pdfVersion string
 }
 
 // NewBundler creates a new PDF bundler.
+//
+// Call this once, then use FillMultiple to add forms, and Bundle to
+// generate the final combined PDF.
+//
+// Example:
+//
+//	bundler := pdffill.NewBundler()
+//	bundler.FillMultiple(template, formData1, formData2, formData3)
+//	pdf, err := bundler.Bundle()
 func NewBundler() *Bundler {
 	return &Bundler{
 		forms:      make([]*FilledForm, 0),
@@ -32,7 +71,19 @@ func NewBundler() *Bundler {
 }
 
 // FillMultiple fills a template with multiple form data sets and adds them to the bundle.
-// Each filled form becomes separate pages in the final bundle.
+//
+// Each form data set is filled and added as separate pages in the final bundle.
+// Field names are automatically deduplicated by adding index prefixes (f0_, f1_, etc.)
+// to prevent conflicts when multiple forms are combined.
+//
+// You can call this method multiple times to add more forms:
+//
+//	bundler := pdffill.NewBundler()
+//	bundler.FillMultiple(template, batch1, batch2, batch3)
+//	bundler.FillMultiple(template, batch4, batch5)  // Add more
+//	pdf, err := bundler.Bundle()
+//
+// Returns an error if any form fails to fill or if page counting fails.
 func (b *Bundler) FillMultiple(template *Template, formDataSets ...map[string]string) error {
 	for i, formData := range formDataSets {
 		filled, err := template.fillWithIndex(formData, len(b.forms))
@@ -62,7 +113,34 @@ func (b *Bundler) FillMultiple(template *Template, formDataSets ...map[string]st
 	return nil
 }
 
-// Bundle combines all added forms into a single PDF.
+// Bundle combines all added forms into a single PDF document.
+//
+// This method must be called after FillMultiple. It merges all filled forms
+// into a single PDF with:
+//   - A unified page tree containing all pages
+//   - Deduplicated field names (f0_, f1_, etc. prefixes)
+//   - Renumbered PDF objects with updated references
+//   - A single cross-reference table and trailer
+//
+// The resulting PDF can be opened in any PDF reader, with all forms
+// accessible as separate pages.
+//
+// Performance: ~100ms for 3 forms.
+//
+// Example:
+//
+//	bundler := pdffill.NewBundler()
+//	bundler.FillMultiple(template, data1, data2, data3)
+//
+//	bundledPDF, err := bundler.Bundle()
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//
+//	// Save or return the bundled PDF
+//	os.WriteFile("output.pdf", bundledPDF, 0644)
+//
+// Returns an error if no forms have been added or if bundling fails.
 func (b *Bundler) Bundle() ([]byte, error) {
 	if len(b.forms) == 0 {
 		return nil, fmt.Errorf("no forms to bundle")

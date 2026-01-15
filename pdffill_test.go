@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-//go:embed testdata/osha_bundle.pdf
-var oshaPDF []byte
+//go:embed testdata/template.pdf
+var testPDF []byte
 
 func TestNew(t *testing.T) {
-	template, err := New(oshaPDF)
+	template, err := New(testPDF)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -22,14 +22,14 @@ func TestNew(t *testing.T) {
 		t.Error("New() found no fields in PDF")
 	}
 
-	t.Logf("Found %d fields in OSHA PDF", len(template.fields))
+	t.Logf("Found %d fields in test PDF", len(template.fields))
 	for name := range template.fields {
 		t.Logf("  Field: %q", name)
 	}
 }
 
 func TestTemplate_FieldNames(t *testing.T) {
-	template, err := New(oshaPDF)
+	template, err := New(testPDF)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -50,7 +50,7 @@ func TestTemplate_FieldNames(t *testing.T) {
 }
 
 func TestTemplate_Fill(t *testing.T) {
-	template, err := New(oshaPDF)
+	template, err := New(testPDF)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -112,7 +112,7 @@ func TestTemplate_Fill(t *testing.T) {
 }
 
 func TestTemplate_FillMultipleFields(t *testing.T) {
-	template, err := New(oshaPDF)
+	template, err := New(testPDF)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -136,11 +136,11 @@ func TestTemplate_FillMultipleFields(t *testing.T) {
 		t.Error("Fill() returned empty result")
 	}
 
-	t.Logf("Filled PDF size: %d bytes (original: %d bytes)", len(result), len(oshaPDF))
+	t.Logf("Filled PDF size: %d bytes (original: %d bytes)", len(result), len(testPDF))
 }
 
 func TestTemplate_Reusability(t *testing.T) {
-	template, err := New(oshaPDF)
+	template, err := New(testPDF)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -169,7 +169,7 @@ func TestTemplate_Reusability(t *testing.T) {
 
 func BenchmarkNew(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_, err := New(oshaPDF)
+		_, err := New(testPDF)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -177,7 +177,7 @@ func BenchmarkNew(b *testing.B) {
 }
 
 func BenchmarkFill(b *testing.B) {
-	template, err := New(oshaPDF)
+	template, err := New(testPDF)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func BenchmarkFill(b *testing.B) {
 }
 
 func BenchmarkFillMultiple(b *testing.B) {
-	template, err := New(oshaPDF)
+	template, err := New(testPDF)
 	if err != nil {
 		b.Fatal(err)
 	}

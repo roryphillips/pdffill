@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-//go:embed testdata/osha_bundle.pdf
+//go:embed testdata/template.pdf
 var validationTestPDF []byte
 
 func TestValidation_RequiredFields(t *testing.T) {
@@ -139,7 +139,7 @@ func TestValidation_SkipReadOnly(t *testing.T) {
 	opts.SkipReadOnly = true // Should skip instead of error
 
 	formData := map[string]string{
-		readOnlyField:      "100", // Will be skipped
+		readOnlyField:       "100", // Will be skipped
 		"Employee's Name 1": "John Doe",
 	}
 
@@ -209,9 +209,9 @@ func TestValidation_MultipleErrors(t *testing.T) {
 	opts := StrictFillOptions()
 
 	formData := map[string]string{
-		"Summary of Injury/Illness NAICS": "1234567890",  // Too long
-		"All other Total":                 "100",          // Read-only
-		"NonExistentField":                "value",        // Doesn't exist
+		"Summary of Injury/Illness NAICS": "1234567890", // Too long
+		"All other Total":                 "100",        // Read-only
+		"NonExistentField":                "value",      // Doesn't exist
 	}
 
 	_, err = template.FillWithOptions(formData, opts)
@@ -235,10 +235,10 @@ func TestGetFieldConstraints(t *testing.T) {
 	}
 
 	testCases := []struct {
-		fieldName       string
-		expectRequired  bool
-		expectReadOnly  bool
-		expectMaxLen    int
+		fieldName      string
+		expectRequired bool
+		expectReadOnly bool
+		expectMaxLen   int
 	}{
 		{"All other Total", false, true, 0},
 		{"Summary of Injury/Illness NAICS", false, false, 6},
@@ -306,7 +306,7 @@ func BenchmarkFillWithValidation(b *testing.B) {
 
 	opts := StrictFillOptions()
 	formData := map[string]string{
-		"Employee's Name 1": "John Doe",
+		"Employee's Name 1":          "John Doe",
 		"Log of Injury/Illness Year": "2026",
 	}
 
@@ -326,7 +326,7 @@ func BenchmarkFillNoValidation(b *testing.B) {
 	}
 
 	formData := map[string]string{
-		"Employee's Name 1": "John Doe",
+		"Employee's Name 1":          "John Doe",
 		"Log of Injury/Illness Year": "2026",
 	}
 

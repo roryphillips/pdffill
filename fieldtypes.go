@@ -6,15 +6,32 @@ import (
 )
 
 // FieldType represents the type of a PDF form field.
+//
+// PDF forms support various field types defined in the AcroForm specification.
+// This library auto-detects field types based on PDF dictionary entries like
+// /FT (field type) and /Ff (field flags).
 type FieldType int
 
 const (
+	// FieldTypeUnknown indicates an unrecognized or unsupported field type.
 	FieldTypeUnknown FieldType = iota
+
+	// FieldTypeText is a single-line text field (/FT /Tx).
 	FieldTypeText
+
+	// FieldTypeMultilineText is a multi-line text field (/FT /Tx with /Ff bit 12).
 	FieldTypeMultilineText
+
+	// FieldTypeNumber is a numeric text field.
 	FieldTypeNumber
+
+	// FieldTypeCheckbox is a checkbox button (/FT /Btn without /Kids).
 	FieldTypeCheckbox
+
+	// FieldTypeRadio is a radio button group (/FT /Btn with /Kids).
 	FieldTypeRadio
+
+	// FieldTypeChoice is a dropdown or list field (/FT /Ch).
 	FieldTypeChoice
 )
 
@@ -38,19 +55,49 @@ func (ft FieldType) String() string {
 	}
 }
 
-// FieldInfo contains metadata about a form field.
+// FieldInfo contains metadata about a PDF form field.
+//
+// This provides detailed information about a field's type, location in the PDF,
+// and type-specific metadata like radio button options or choice lists.
+//
+// Use GetFieldInfo to inspect fields before filling them, which is useful for:
+//   - Building dynamic UI forms
+//   - Validating field types match expected data
+//   - Discovering radio button options
+//   - Understanding field structure
 type FieldInfo struct {
-	Name      string
-	Type      FieldType
-	ObjNum    int
-	Offset    int
-	Length    int
-	HasKids   bool      // For radio button groups
-	KidRefs   []int     // Child object references for radio groups
-	Options   []string  // For choice fields
+	Name    string    // Field name as it appears in the PDF
+	Type    FieldType // Detected field type
+	ObjNum  int       // PDF object number containing this field
+	Offset  int       // Byte offset in the PDF (internal use)
+	Length  int       // Length of field content (internal use)
+	HasKids bool      // True for radio button groups with /Kids
+	KidRefs []int     // Child object references for radio button groups
+	Options []string  // Available options for choice fields
 }
 
-// GetFieldInfo returns detailed information about a field.
+// GetFieldInfo returns detailed information about a specific field.
+//
+// This method inspects the field's PDF object to determine its type and
+// extract type-specific metadata.
+//
+// Example:
+//
+//	info, err := template.GetFieldInfo("employment_status")
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//
+//	switch info.Type {
+//	case pdffill.FieldTypeRadio:
+//		fmt.Printf("Radio button group with %d options\n", len(info.KidRefs))
+//	case pdffill.FieldTypeCheckbox:
+//		fmt.Println("Checkbox field")
+//	case pdffill.FieldTypeText:
+//		fmt.Println("Text field")
+//	}
+//
+// Returns an error if the field doesn't exist in the template.
 func (t *Template) GetFieldInfo(fieldName string) (*FieldInfo, error) {
 	fieldRef, exists := t.fields[fieldName]
 	if !exists {
