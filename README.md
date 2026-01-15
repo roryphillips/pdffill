@@ -7,8 +7,10 @@ Fast, minimal PDF form filling library using only Go stdlib.
 - **Zero dependencies** - only uses Go standard library
 - **Fast** - optimized for speed with minimal allocations
 - **Simple API** - initialize once, fill many times
+- **Complete field type support** - text, multiline, checkboxes, radio buttons, numbers
 - **PDF Bundling** - combine multiple filled forms into one document
 - **Field deduplication** - automatic field name prefixing for bundles
+- **Field introspection** - query field types and metadata
 - **Focused** - does one thing well: fill PDF forms
 - **Embedded-friendly** - works great with `go:embed`
 
@@ -73,6 +75,70 @@ template, _ := pdffill.New(templatePDF)
 fields := template.FieldNames()
 for _, name := range fields {
     fmt.Println(name)
+}
+```
+
+## Field Type Support
+
+The library automatically handles different PDF field types:
+
+### Text Fields
+```go
+formData := map[string]string{
+    "name":    "John Doe",
+    "email":   "john@example.com",
+    "address": "123 Main St",
+}
+```
+
+### Multiline Text Fields
+```go
+formData := map[string]string{
+    "description": `This is a long description
+that spans multiple lines
+and will be properly encoded.`,
+}
+```
+
+### Checkboxes
+Accepts various truthy/falsy values:
+```go
+formData := map[string]string{
+    "agreed":     "Yes",    // or "On", "true", "1", "X", "checked"
+    "subscribed": "Off",    // or "No", "false", "0", ""
+}
+```
+
+### Radio Buttons
+```go
+formData := map[string]string{
+    "gender":        "Male",      // or "Female", "Other"
+    "maritalStatus": "Single",    // select one option from the group
+}
+```
+
+### Number Fields
+```go
+formData := map[string]string{
+    "age":      "35",
+    "quantity": "42",
+    "amount":   "1250.50",
+}
+```
+
+### Inspecting Field Types
+```go
+info, err := template.GetFieldInfo("fieldName")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Field: %s\n", info.Name)
+fmt.Printf("Type: %s\n", info.Type)  // Text, Checkbox, Radio, etc.
+fmt.Printf("Object Number: %d\n", info.ObjNum)
+
+if info.Type == pdffill.FieldTypeRadio {
+    fmt.Printf("Radio options: %d\n", len(info.KidRefs))
 }
 ```
 
@@ -183,12 +249,21 @@ BenchmarkBundler_FullWorkflow-8   10  107ms/op   83 MB/op  133095 allocs/op
 - Bundle into single PDF: ~110ms
 - Full workflow (fill + bundle): ~107ms
 
+## Supported Field Types
+
+✅ Text fields
+✅ Multiline text fields
+✅ Number fields
+✅ Checkboxes
+✅ Radio button groups
+❌ Choice/dropdown fields (coming soon)
+❌ Signature fields
+
 ## Limitations
 
 - **AcroForms only** - only supports PDF AcroForm fields
-- **Text fields** - optimized for text field values
 - **No creation** - cannot create PDFs from scratch
-- **No validation** - doesn't validate field types or values
+- **No validation** - doesn't validate field values against PDF constraints
 - **No encryption** - doesn't support encrypted PDFs
 
 ## Design Philosophy

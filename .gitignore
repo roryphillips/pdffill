@@ -16,6 +16,8 @@ output.pdf
 bundled_output.pdf
 employee_bundle.pdf
 filled_form.pdf
+all_field_types_filled.pdf
+mixed_fields_output.pdf
 *.out
 
 # Go workspace file

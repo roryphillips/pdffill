@@ -45,7 +45,26 @@ func (t *Template) Fill(formData map[string]string) ([]byte, error) {
 }
 
 // setFieldValue modifies a field object's /V (value) entry.
+// Handles different field types: text, checkbox, radio buttons, etc.
 func (t *Template) setFieldValue(objContent []byte, value string) ([]byte, error) {
+	// Detect field type to determine how to set the value
+	fieldType := detectFieldType(objContent)
+
+	switch fieldType {
+	case FieldTypeCheckbox:
+		return t.setCheckboxValue(objContent, value)
+	case FieldTypeRadio:
+		return t.setRadioValue(objContent, value)
+	case FieldTypeText, FieldTypeMultilineText, FieldTypeNumber:
+		return t.setTextValue(objContent, value)
+	default:
+		// Default to text value
+		return t.setTextValue(objContent, value)
+	}
+}
+
+// setTextValue sets the value for text, multiline, and number fields.
+func (t *Template) setTextValue(objContent []byte, value string) ([]byte, error) {
 	// Find /V entry in dictionary
 	vIdx := bytes.Index(objContent, []byte("/V"))
 	if vIdx == -1 {
@@ -339,3 +358,4 @@ func parseInt(b []byte) (int, error) {
 func isDelimiter(c byte) bool {
 	return c == '(' || c == ')' || c == '<' || c == '>' || c == '[' || c == ']' || c == '{' || c == '}' || c == '/' || c == '%'
 }
+
