@@ -14,6 +14,7 @@ example/main
 *.test
 
 .idea/
+.DS_Store
 
 # Output files
 *.out

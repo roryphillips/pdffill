@@ -324,6 +324,87 @@ func BenchmarkBundler_FullWorkflow(b *testing.B) {
 	}
 }
 
+func TestBundler_Compression(t *testing.T) {
+	template, err := New(bundleTestPDF)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	fields := template.FieldNames()
+	if len(fields) < 5 {
+		t.Skip("Need at least 5 fields")
+	}
+
+	formSets := []map[string]string{
+		{fields[0]: "Employee One", fields[1]: "2026", fields[2]: "Test data"},
+		{fields[0]: "Employee Two", fields[1]: "2026", fields[2]: "More data"},
+		{fields[0]: "Employee Three", fields[1]: "2026", fields[2]: "Even more"},
+	}
+
+	// Bundle without compression
+	bundlerNoCompress := NewBundler()
+	bundlerNoCompress.FillMultiple(template, formSets...)
+	uncompressed, err := bundlerNoCompress.Bundle()
+	if err != nil {
+		t.Fatalf("Bundle() without compression error = %v", err)
+	}
+
+	// Bundle with compression
+	bundlerCompress := NewBundler()
+	bundlerCompress.EnableCompression()
+	bundlerCompress.FillMultiple(template, formSets...)
+	compressed, err := bundlerCompress.Bundle()
+	if err != nil {
+		t.Fatalf("Bundle() with compression error = %v", err)
+	}
+
+	// Log sizes
+	t.Logf("Uncompressed size: %d bytes", len(uncompressed))
+	t.Logf("Compressed size: %d bytes", len(compressed))
+
+	savings := float64(len(uncompressed)-len(compressed)) / float64(len(uncompressed)) * 100
+	t.Logf("Compression savings: %.1f%%", savings)
+
+	// Compressed should be smaller (or at least not larger)
+	if len(compressed) > len(uncompressed) {
+		t.Errorf("Compressed (%d) is larger than uncompressed (%d)", len(compressed), len(uncompressed))
+	}
+
+	// Verify the compressed PDF is valid (starts with %PDF)
+	if !bytes.HasPrefix(compressed, []byte("%PDF")) {
+		t.Error("Compressed PDF doesn't have valid header")
+	}
+}
+
+func BenchmarkBundler_WithCompression(b *testing.B) {
+	template, err := New(bundleTestPDF)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	fields := template.FieldNames()
+	if len(fields) == 0 {
+		b.Skip("No fields found")
+	}
+
+	formSets := []map[string]string{
+		{fields[0]: "Value 1"},
+		{fields[0]: "Value 2"},
+		{fields[0]: "Value 3"},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bundler := NewBundler()
+		bundler.EnableCompression()
+		bundler.FillMultiple(template, formSets...)
+		_, err := bundler.Bundle()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 // Helper function
 func containsString(data []byte, substr []byte) bool {
 	return len(data) > 0 && len(substr) > 0 &&

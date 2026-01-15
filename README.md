@@ -14,6 +14,7 @@ Fast, minimal PDF form filling library using only Go stdlib.
 - **Comprehensive validation** - MaxLen, required fields, read-only checks
 - **Flexible validation modes** - none, basic, or strict
 - **PDF Bundling** - combine multiple filled forms into one document
+- **Optional compression** - reduce bundle file size with flate compression
 - **Field deduplication** - automatic field name prefixing for bundles
 - **Field introspection** - query field types, metadata, and constraints
 - **Focused** - does one thing well: fill PDF forms
@@ -293,6 +294,26 @@ os.WriteFile("bundled.pdf", bundledPDF, 0644)
 - Forms are grouped by template in the bundle
 - Efficient object renumbering and page concatenation
 - All objects and cross-references are properly merged
+
+### Compression
+
+Enable optional stream compression to reduce bundle file size:
+
+```go
+bundler := pdffill.NewBundler()
+bundler.EnableCompression()  // Enable flate compression
+bundler.FillMultiple(template, data1, data2, data3)
+
+compressedPDF, err := bundler.Bundle()  // Smaller file size
+```
+
+**Compression tradeoffs:**
+- Reduces file size (varies by content, typically 4-30% for PDFs with uncompressed streams)
+- Adds ~50% processing overhead
+- Already-compressed streams are automatically skipped
+- Only compresses if it actually reduces size
+
+Use compression when file size matters more than speed (e.g., email attachments, storage).
 
 ## HTTP Server Example
 
