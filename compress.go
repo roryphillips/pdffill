@@ -2,28 +2,24 @@ package pdffill
 
 import (
 	"bytes"
-	"compress/flate"
+	"compress/zlib"
 	"fmt"
 )
 
-// compressStream compresses a PDF stream using flate compression.
-// Returns the compressed stream data with updated dictionary entries.
+// compressStream compresses a PDF stream using zlib compression.
+// PDF FlateDecode filter uses zlib format (deflate with header/checksum).
 func compressStream(streamData []byte) ([]byte, error) {
 	var buf bytes.Buffer
 
-	// Use flate compression (same as zlib but without headers)
-	// Level 6 is a good balance between speed and compression
-	fw, err := flate.NewWriter(&buf, 6)
-	if err != nil {
-		return nil, fmt.Errorf("create flate writer: %w", err)
-	}
+	// Use zlib compression at default level (good balance of speed and ratio)
+	zw := zlib.NewWriter(&buf)
 
-	if _, err := fw.Write(streamData); err != nil {
+	if _, err := zw.Write(streamData); err != nil {
 		return nil, fmt.Errorf("compress stream: %w", err)
 	}
 
-	if err := fw.Close(); err != nil {
-		return nil, fmt.Errorf("close flate writer: %w", err)
+	if err := zw.Close(); err != nil {
+		return nil, fmt.Errorf("close zlib writer: %w", err)
 	}
 
 	return buf.Bytes(), nil

@@ -10,6 +10,7 @@ Fast, minimal PDF form filling library using only Go stdlib.
 - **Zero dependencies** - only uses Go standard library
 - **Fast** - optimized for speed with minimal allocations
 - **Simple API** - initialize once, fill many times
+- **PDF 1.3 - 1.7 support** - handles XRef streams and compressed object streams
 - **Complete field type support** - text, multiline, checkboxes, radio buttons, numbers
 - **Comprehensive validation** - MaxLen, required fields, read-only checks
 - **Flexible validation modes** - none, basic, or strict

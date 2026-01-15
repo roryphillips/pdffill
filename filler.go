@@ -277,16 +277,24 @@ func writeXRef(buf *bytes.Buffer, entries map[int]int) error {
 
 // writeTrailer writes the trailer dictionary.
 func (t *Template) writeTrailer(buf *bytes.Buffer, xrefOffset, size int) error {
-	// Find original trailer
+	// Try to find traditional trailer first
 	trailerIdx := bytes.LastIndex(t.data, []byte("trailer"))
-	if trailerIdx == -1 {
-		return fmt.Errorf("original trailer not found")
-	}
 
-	// Parse original trailer dict
-	trailerDict, err := t.parseDictionary(trailerIdx + 7)
-	if err != nil {
-		return fmt.Errorf("parse original trailer: %w", err)
+	var trailerDict []byte
+	var err error
+
+	if trailerIdx != -1 {
+		// Traditional trailer
+		trailerDict, err = t.parseDictionary(trailerIdx + 7)
+		if err != nil {
+			return fmt.Errorf("parse original trailer: %w", err)
+		}
+	} else {
+		// PDF 1.5+ with XRef stream - extract trailer info from XRef stream dict
+		trailerDict, err = t.extractTrailerFromXRefStream()
+		if err != nil {
+			return fmt.Errorf("extract trailer from XRef stream: %w", err)
+		}
 	}
 
 	// Write trailer with updated Size
@@ -303,6 +311,108 @@ func (t *Template) writeTrailer(buf *bytes.Buffer, xrefOffset, size int) error {
 	buf.WriteString("%%EOF\n")
 
 	return nil
+}
+
+// extractTrailerFromXRefStream extracts trailer-equivalent info from a PDF 1.5+ XRef stream.
+func (t *Template) extractTrailerFromXRefStream() ([]byte, error) {
+	// Find startxref to locate the XRef stream
+	startxrefIdx := bytes.LastIndex(t.data, []byte("startxref"))
+	if startxrefIdx == -1 {
+		return nil, fmt.Errorf("startxref not found")
+	}
+
+	// Parse xref offset
+	offsetStart := startxrefIdx + 9
+	for offsetStart < len(t.data) && isWhitespace(t.data[offsetStart]) {
+		offsetStart++
+	}
+	offsetEnd := offsetStart
+	for offsetEnd < len(t.data) && isDigit(t.data[offsetEnd]) {
+		offsetEnd++
+	}
+
+	xrefOffset, _ := parseInt(t.data[offsetStart:offsetEnd])
+	if xrefOffset == 0 || xrefOffset >= len(t.data) {
+		return nil, fmt.Errorf("invalid xref offset")
+	}
+
+	// Find the XRef stream object dictionary
+	chunk := t.data[xrefOffset:]
+
+	// Find dictionary start
+	dictStart := bytes.Index(chunk, []byte("<<"))
+	if dictStart == -1 {
+		return nil, fmt.Errorf("XRef stream dictionary not found")
+	}
+
+	// Find dictionary end (before stream keyword)
+	streamIdx := bytes.Index(chunk, []byte(">>stream"))
+	if streamIdx == -1 {
+		streamIdx = bytes.Index(chunk, []byte(">> stream"))
+	}
+	if streamIdx == -1 {
+		return nil, fmt.Errorf("stream keyword not found in XRef object")
+	}
+
+	// Extract the dictionary content
+	xrefDict := chunk[dictStart : streamIdx+2] // Include >>
+
+	// Build a trailer-compatible dictionary with /Root and /Size from XRef stream
+	var result bytes.Buffer
+	result.WriteString("<<")
+
+	// Extract /Root
+	rootIdx := bytes.Index(xrefDict, []byte("/Root"))
+	if rootIdx != -1 {
+		// Find the reference value
+		refStart := rootIdx + 5
+		for refStart < len(xrefDict) && isWhitespace(xrefDict[refStart]) {
+			refStart++
+		}
+		refEnd := refStart
+		for refEnd < len(xrefDict) && (isDigit(xrefDict[refEnd]) || xrefDict[refEnd] == ' ' || xrefDict[refEnd] == 'R') {
+			refEnd++
+		}
+		result.WriteString("/Root ")
+		result.Write(xrefDict[refStart:refEnd])
+		result.WriteString("\n")
+	}
+
+	// Extract /Info if present
+	infoIdx := bytes.Index(xrefDict, []byte("/Info"))
+	if infoIdx != -1 {
+		refStart := infoIdx + 5
+		for refStart < len(xrefDict) && isWhitespace(xrefDict[refStart]) {
+			refStart++
+		}
+		refEnd := refStart
+		for refEnd < len(xrefDict) && (isDigit(xrefDict[refEnd]) || xrefDict[refEnd] == ' ' || xrefDict[refEnd] == 'R') {
+			refEnd++
+		}
+		result.WriteString("/Info ")
+		result.Write(xrefDict[refStart:refEnd])
+		result.WriteString("\n")
+	}
+
+	// Extract /Size
+	sizeIdx := bytes.Index(xrefDict, []byte("/Size"))
+	if sizeIdx != -1 {
+		valStart := sizeIdx + 5
+		for valStart < len(xrefDict) && isWhitespace(xrefDict[valStart]) {
+			valStart++
+		}
+		valEnd := valStart
+		for valEnd < len(xrefDict) && isDigit(xrefDict[valEnd]) {
+			valEnd++
+		}
+		result.WriteString("/Size ")
+		result.Write(xrefDict[valStart:valEnd])
+		result.WriteString("\n")
+	}
+
+	result.WriteString(">>")
+
+	return result.Bytes(), nil
 }
 
 // updateSize updates the /Size entry in a trailer dictionary.
