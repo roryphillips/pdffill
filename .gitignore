@@ -5,6 +5,10 @@
 *.so
 *.dylib
 bin/
+example/validation_example
+example/bundle_example
+example/all_field_types
+example/main
 
 # Test binary
 *.test

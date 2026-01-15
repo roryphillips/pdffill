@@ -8,9 +8,11 @@ Fast, minimal PDF form filling library using only Go stdlib.
 - **Fast** - optimized for speed with minimal allocations
 - **Simple API** - initialize once, fill many times
 - **Complete field type support** - text, multiline, checkboxes, radio buttons, numbers
+- **Comprehensive validation** - MaxLen, required fields, read-only checks
+- **Flexible validation modes** - none, basic, or strict
 - **PDF Bundling** - combine multiple filled forms into one document
 - **Field deduplication** - automatic field name prefixing for bundles
-- **Field introspection** - query field types and metadata
+- **Field introspection** - query field types, metadata, and constraints
 - **Focused** - does one thing well: fill PDF forms
 - **Embedded-friendly** - works great with `go:embed`
 
@@ -142,6 +144,111 @@ if info.Type == pdffill.FieldTypeRadio {
 }
 ```
 
+## Validation
+
+The library supports comprehensive validation of form data before filling:
+
+### Basic Usage
+
+```go
+// Use strict validation
+opts := pdffill.StrictFillOptions()
+filled, err := template.FillWithOptions(formData, opts)
+if err != nil {
+    // Handle validation errors
+    log.Printf("Validation failed: %v", err)
+}
+```
+
+### Validation Modes
+
+```go
+// No validation (fastest, default)
+opts := pdffill.DefaultFillOptions()
+opts.Validation = pdffill.ValidationNone
+
+// Basic validation (required fields)
+opts.Validation = pdffill.ValidationBasic
+
+// Strict validation (all constraints)
+opts.Validation = pdffill.ValidationStrict
+```
+
+### Validation Features
+
+**Max Length Constraints**
+```go
+// Field has MaxLen=6, value is too long
+formData := map[string]string{
+    "naics_code": "1234567890", // Error: exceeds maximum 6
+}
+
+// Or truncate automatically
+opts := pdffill.StrictFillOptions()
+opts.TruncateMaxLen = true  // Truncates to "123456"
+```
+
+**Read-Only Fields**
+```go
+// Trying to set read-only/calculated field
+formData := map[string]string{
+    "total_field": "100", // Error: field is read-only
+}
+
+// Or skip read-only fields
+opts := pdffill.StrictFillOptions()
+opts.SkipReadOnly = true  // Silently skips read-only fields
+```
+
+**Required Fields**
+```go
+// Check required fields first
+requiredFields := template.GetRequiredFields()
+fmt.Printf("Required: %v\n", requiredFields)
+
+// Validation will error if required fields are missing
+```
+
+**Validation Without Filling**
+```go
+// Validate data before committing to fill
+err := template.ValidateOnly(formData, pdffill.StrictFillOptions())
+if err != nil {
+    log.Printf("Data validation failed: %v", err)
+    return
+}
+
+// Data is valid, proceed with fill
+filled, _ := template.Fill(formData)
+```
+
+**Inspect Field Constraints**
+```go
+constraints, err := template.GetFieldConstraints("fieldName")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Required: %v\n", constraints.Required)
+fmt.Printf("ReadOnly: %v\n", constraints.ReadOnly)
+fmt.Printf("MaxLen: %d\n", constraints.MaxLen)
+fmt.Printf("Comb: %v\n", constraints.Comb)
+```
+
+**Multiple Validation Errors**
+```go
+// Returns all validation errors at once
+filled, err := template.FillWithOptions(formData, opts)
+if err != nil {
+    if valErr, ok := err.(*pdffill.ValidationErrors); ok {
+        fmt.Printf("Found %d validation errors:\n", len(valErr.Errors))
+        for _, e := range valErr.Errors {
+            fmt.Printf("  - %s: %s\n", e.Field, e.Message)
+        }
+    }
+}
+```
+
 ## Bundling Multiple Filled PDFs
 
 Combine multiple filled forms into a single PDF document:
@@ -249,6 +356,15 @@ BenchmarkBundler_FullWorkflow-8   10  107ms/op   83 MB/op  133095 allocs/op
 - Bundle into single PDF: ~110ms
 - Full workflow (fill + bundle): ~107ms
 
+### Validation Performance
+```
+BenchmarkFillNoValidation-8       106   11ms/op   7.1 MB/op   9517 allocs/op
+BenchmarkFillWithValidation-8       2  829ms/op   7.1 MB/op  10245 allocs/op
+```
+
+- No validation (default): ~11ms
+- With strict validation: ~829ms (only recommended when needed)
+
 ## Supported Field Types
 
 ✅ Text fields
@@ -263,7 +379,7 @@ BenchmarkBundler_FullWorkflow-8   10  107ms/op   83 MB/op  133095 allocs/op
 
 - **AcroForms only** - only supports PDF AcroForm fields
 - **No creation** - cannot create PDFs from scratch
-- **No validation** - doesn't validate field values against PDF constraints
+- **JavaScript validation** - doesn't execute JavaScript validation scripts (but does check PDF-level constraints)
 - **No encryption** - doesn't support encrypted PDFs
 
 ## Design Philosophy
