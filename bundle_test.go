@@ -3,12 +3,19 @@ package pdffill
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"os"
 	"testing"
 )
 
 //go:embed testdata/template.pdf
 var bundleTestPDF []byte
+
+//go:embed testdata/form_pdf13.pdf
+var bundlePDF13 []byte
+
+//go:embed testdata/form_pdf16.pdf
+var bundlePDF16 []byte
 
 func TestBundler_FillMultiple(t *testing.T) {
 	template, err := New(bundleTestPDF)
@@ -410,4 +417,156 @@ func containsString(data []byte, substr []byte) bool {
 	return len(data) > 0 && len(substr) > 0 &&
 		(len(data) >= len(substr)) &&
 		(bytes.Index(data, substr) != -1)
+}
+
+// TestRealWorldBundle tests bundling 1 PDF 1.3 form and 10 PDF 1.6 forms
+// with all fields filled - simulating a real-world batch processing scenario.
+func TestRealWorldBundle(t *testing.T) {
+	// Parse both templates
+	template13, err := New(bundlePDF13)
+	if err != nil {
+		t.Fatalf("New(PDF 1.3) error = %v", err)
+	}
+
+	template16, err := New(bundlePDF16)
+	if err != nil {
+		t.Fatalf("New(PDF 1.6) error = %v", err)
+	}
+
+	fields13 := template13.FieldNames()
+	fields16 := template16.FieldNames()
+
+	t.Logf("PDF 1.3 template: %d fields", len(fields13))
+	t.Logf("PDF 1.6 template: %d fields", len(fields16))
+
+	bundler := NewBundler()
+
+	// Create form data for PDF 1.3 (1 form with all fields filled)
+	formData13 := make(map[string]string)
+	for i, field := range fields13 {
+		formData13[field] = fmt.Sprintf("Value13_%d", i+1)
+	}
+
+	err = bundler.FillMultiple(template13, formData13)
+	if err != nil {
+		t.Fatalf("FillMultiple(PDF 1.3) error = %v", err)
+	}
+
+	// Create form data for PDF 1.6 (10 forms with all fields filled)
+	formSets16 := make([]map[string]string, 10)
+	for i := 0; i < 10; i++ {
+		formSets16[i] = make(map[string]string)
+		for j, field := range fields16 {
+			formSets16[i][field] = fmt.Sprintf("Form%d_Field%d", i+1, j+1)
+		}
+	}
+
+	err = bundler.FillMultiple(template16, formSets16...)
+	if err != nil {
+		t.Fatalf("FillMultiple(PDF 1.6) error = %v", err)
+	}
+
+	// Bundle all forms
+	bundledPDF, err := bundler.Bundle()
+	if err != nil {
+		t.Fatalf("Bundle() error = %v", err)
+	}
+
+	// Verify output
+	if len(bundledPDF) == 0 {
+		t.Error("Bundle() returned empty PDF")
+	}
+
+	if string(bundledPDF[:5]) != "%PDF-" {
+		t.Error("Bundle() result doesn't start with PDF header")
+	}
+
+	t.Logf("Real-world bundle: %d bytes (1 PDF 1.3 + 10 PDF 1.6 forms)", len(bundledPDF))
+	t.Logf("Total fields filled: %d", len(fields13)+10*len(fields16))
+}
+
+// BenchmarkRealWorldBundle benchmarks the real-world scenario of bundling
+// 1 PDF 1.3 form and 10 PDF 1.6 forms with all fields filled.
+func BenchmarkRealWorldBundle(b *testing.B) {
+	// Parse both templates (outside benchmark loop)
+	template13, err := New(bundlePDF13)
+	if err != nil {
+		b.Fatalf("New(PDF 1.3) error = %v", err)
+	}
+
+	template16, err := New(bundlePDF16)
+	if err != nil {
+		b.Fatalf("New(PDF 1.6) error = %v", err)
+	}
+
+	fields13 := template13.FieldNames()
+	fields16 := template16.FieldNames()
+
+	// Pre-create form data
+	formData13 := make(map[string]string)
+	for i, field := range fields13 {
+		formData13[field] = fmt.Sprintf("Value13_%d", i+1)
+	}
+
+	formSets16 := make([]map[string]string, 10)
+	for i := 0; i < 10; i++ {
+		formSets16[i] = make(map[string]string)
+		for j, field := range fields16 {
+			formSets16[i][field] = fmt.Sprintf("Form%d_Field%d", i+1, j+1)
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bundler := NewBundler()
+		bundler.FillMultiple(template13, formData13)
+		bundler.FillMultiple(template16, formSets16...)
+		_, err := bundler.Bundle()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkRealWorldBundleWithCompression benchmarks the same scenario with compression enabled.
+func BenchmarkRealWorldBundleWithCompression(b *testing.B) {
+	// Parse both templates (outside benchmark loop)
+	template13, err := New(bundlePDF13)
+	if err != nil {
+		b.Fatalf("New(PDF 1.3) error = %v", err)
+	}
+
+	template16, err := New(bundlePDF16)
+	if err != nil {
+		b.Fatalf("New(PDF 1.6) error = %v", err)
+	}
+
+	fields13 := template13.FieldNames()
+	fields16 := template16.FieldNames()
+
+	// Pre-create form data
+	formData13 := make(map[string]string)
+	for i, field := range fields13 {
+		formData13[field] = fmt.Sprintf("Value13_%d", i+1)
+	}
+
+	formSets16 := make([]map[string]string, 10)
+	for i := 0; i < 10; i++ {
+		formSets16[i] = make(map[string]string)
+		for j, field := range fields16 {
+			formSets16[i][field] = fmt.Sprintf("Form%d_Field%d", i+1, j+1)
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bundler := NewBundler()
+		bundler.EnableCompression()
+		bundler.FillMultiple(template13, formData13)
+		bundler.FillMultiple(template16, formSets16...)
+		_, err := bundler.Bundle()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
 }

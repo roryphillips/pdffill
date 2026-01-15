@@ -358,7 +358,7 @@ func handleBundlePDFs(w http.ResponseWriter, r *http.Request) {
 
 ## Performance
 
-Benchmarks on Apple M1 with a 205-field OSHA form:
+Benchmarks on Apple M1:
 
 ### Single Form Filling
 ```
@@ -367,11 +367,11 @@ BenchmarkFill-8         176      7ms/op    7.1 MB/op    9511 allocs/op
 BenchmarkFillMultiple-8  54     24ms/op    7.1 MB/op    9537 allocs/op
 ```
 
-- Template parsing: ~759ms (done once)
+- Template parsing: ~759ms (done once, reuse template)
 - Single field fill: ~7ms
 - Multiple field fill: ~24ms
 
-### PDF Bundling
+### PDF Bundling (Small Scale)
 ```
 BenchmarkBundler_FillMultiple-8   51   26ms/op   21 MB/op   28570 allocs/op
 BenchmarkBundler_Bundle-8         14  110ms/op   61 MB/op  135209 allocs/op
@@ -381,6 +381,17 @@ BenchmarkBundler_FullWorkflow-8   10  107ms/op   83 MB/op  133095 allocs/op
 - Fill 3 forms: ~26ms
 - Bundle into single PDF: ~110ms
 - Full workflow (fill + bundle): ~107ms
+
+### Real-World Bundling
+Bundling 1 PDF 1.3 form (127 fields) + 10 PDF 1.6 forms (45 fields each) = 577 total fields:
+```
+BenchmarkRealWorldBundle-8                 1   2.17s/op   251 MB/op   168K allocs/op
+BenchmarkRealWorldBundleWithCompression-8  1   2.17s/op   251 MB/op   168K allocs/op
+```
+
+- 11 forms, 577 fields filled and bundled: ~2.17s
+- Output size: ~10.4 MB
+- Compression adds minimal overhead (streams already compressed)
 
 ### Validation Performance
 ```
