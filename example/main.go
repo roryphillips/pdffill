@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/roryq/pdffill"
+	"github.com/roryphillips/pdffill"
 )
 
 //go:embed template.pdf

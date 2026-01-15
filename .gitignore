@@ -13,6 +13,9 @@ bin/
 
 # Output files
 output.pdf
+bundled_output.pdf
+employee_bundle.pdf
+filled_form.pdf
 *.out
 
 # Go workspace file
