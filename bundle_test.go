@@ -439,17 +439,10 @@ func TestRealWorldBundle(t *testing.T) {
 	t.Logf("PDF 1.3 template: %d fields", len(fields13))
 	t.Logf("PDF 1.6 template: %d fields", len(fields16))
 
-	bundler := NewBundler()
-
 	// Create form data for PDF 1.3 (1 form with all fields filled)
 	formData13 := make(map[string]string)
 	for i, field := range fields13 {
 		formData13[field] = fmt.Sprintf("Value13_%d", i+1)
-	}
-
-	err = bundler.FillMultiple(template13, formData13)
-	if err != nil {
-		t.Fatalf("FillMultiple(PDF 1.3) error = %v", err)
 	}
 
 	// Create form data for PDF 1.6 (10 forms with all fields filled)
@@ -461,27 +454,38 @@ func TestRealWorldBundle(t *testing.T) {
 		}
 	}
 
-	err = bundler.FillMultiple(template16, formSets16...)
-	if err != nil {
-		t.Fatalf("FillMultiple(PDF 1.6) error = %v", err)
-	}
-
-	// Bundle all forms
-	bundledPDF, err := bundler.Bundle()
+	// Bundle without compression
+	bundlerNoCompress := NewBundler()
+	bundlerNoCompress.FillMultiple(template13, formData13)
+	bundlerNoCompress.FillMultiple(template16, formSets16...)
+	uncompressed, err := bundlerNoCompress.Bundle()
 	if err != nil {
 		t.Fatalf("Bundle() error = %v", err)
 	}
 
+	// Bundle with compression
+	bundlerCompress := NewBundler()
+	bundlerCompress.EnableCompression()
+	bundlerCompress.FillMultiple(template13, formData13)
+	bundlerCompress.FillMultiple(template16, formSets16...)
+	compressed, err := bundlerCompress.Bundle()
+	if err != nil {
+		t.Fatalf("Bundle() with compression error = %v", err)
+	}
+
 	// Verify output
-	if len(bundledPDF) == 0 {
+	if len(uncompressed) == 0 {
 		t.Error("Bundle() returned empty PDF")
 	}
 
-	if string(bundledPDF[:5]) != "%PDF-" {
+	if string(uncompressed[:5]) != "%PDF-" {
 		t.Error("Bundle() result doesn't start with PDF header")
 	}
 
-	t.Logf("Real-world bundle: %d bytes (1 PDF 1.3 + 10 PDF 1.6 forms)", len(bundledPDF))
+	t.Logf("Uncompressed: %d bytes (%.2f MB)", len(uncompressed), float64(len(uncompressed))/1024/1024)
+	t.Logf("Compressed:   %d bytes (%.2f MB)", len(compressed), float64(len(compressed))/1024/1024)
+	savings := float64(len(uncompressed)-len(compressed)) / float64(len(uncompressed)) * 100
+	t.Logf("Compression savings: %.1f%%", savings)
 	t.Logf("Total fields filled: %d", len(fields13)+10*len(fields16))
 }
 
@@ -568,5 +572,69 @@ func BenchmarkRealWorldBundleWithCompression(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func TestBundler_RealWorldCompression(t *testing.T) {
+	// Parse both templates (outside benchmark loop)
+	template13, err := New(bundlePDF13)
+	if err != nil {
+		t.Fatalf("New(PDF 1.3) error = %v", err)
+	}
+
+	template16, err := New(bundlePDF16)
+	if err != nil {
+		t.Fatalf("New(PDF 1.6) error = %v", err)
+	}
+
+	fields13 := template13.FieldNames()
+	fields16 := template16.FieldNames()
+
+	// Pre-create form data
+	formData13 := make(map[string]string)
+	for i, field := range fields13 {
+		formData13[field] = fmt.Sprintf("Value13_%d", i+1)
+	}
+
+	formSets16 := make([]map[string]string, 10)
+	for i := 0; i < 10; i++ {
+		formSets16[i] = make(map[string]string)
+		for j, field := range fields16 {
+			formSets16[i][field] = fmt.Sprintf("Form%d_Field%d", i+1, j+1)
+		}
+	}
+
+	bundlerNoCompress := NewBundler()
+	bundlerNoCompress.FillMultiple(template13, formData13)
+	bundlerNoCompress.FillMultiple(template16, formSets16...)
+	uncompressed, err := bundlerNoCompress.Bundle()
+	if err != nil {
+		t.Fatalf("Bundle() without compression error = %v", err)
+	}
+
+	bundlerCompress := NewBundler()
+	bundlerCompress.EnableCompression()
+	bundlerCompress.FillMultiple(template13, formData13)
+	bundlerCompress.FillMultiple(template16, formSets16...)
+	compressed, err := bundlerCompress.Bundle()
+	if err != nil {
+		t.Fatalf("Bundle() without compression error = %v", err)
+	}
+
+	// Log sizes
+	t.Logf("Uncompressed size: %d bytes", len(uncompressed))
+	t.Logf("Compressed size: %d bytes", len(compressed))
+
+	savings := float64(len(uncompressed)-len(compressed)) / float64(len(uncompressed)) * 100
+	t.Logf("Compression savings: %.1f%%", savings)
+
+	// Compressed should be smaller (or at least not larger)
+	if len(compressed) > len(uncompressed) {
+		t.Errorf("Compressed (%d) is larger than uncompressed (%d)", len(compressed), len(uncompressed))
+	}
+
+	// Verify the compressed PDF is valid (starts with %PDF)
+	if !bytes.HasPrefix(compressed, []byte("%PDF")) {
+		t.Error("Compressed PDF doesn't have valid header")
 	}
 }

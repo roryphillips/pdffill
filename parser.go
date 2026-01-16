@@ -209,26 +209,66 @@ func (t *Template) parseFieldArray(acroForm *pdfObject) error {
 	arrayContent := acroForm.content[arrayStart+1 : arrayEnd]
 	refs := parseReferences(arrayContent)
 
-	// Get each field object and extract name
+	// Get each field object and recursively process with Kids
 	for _, ref := range refs {
-		field, err := t.getObject(ref)
-		if err != nil {
-			continue // Skip invalid fields
-		}
+		t.parseFieldRecursive(ref, "")
+	}
 
-		fieldName := extractName(field.content, "/T")
-		if fieldName == "" {
-			continue // Skip unnamed fields
-		}
+	return nil
+}
 
-		t.fields[fieldName] = &fieldRef{
+// parseFieldRecursive processes a field and all its child fields (Kids).
+// parentName is used to build hierarchical field names (parent.child format).
+func (t *Template) parseFieldRecursive(objNum int, parentName string) {
+	field, err := t.getObject(objNum)
+	if err != nil {
+		return // Skip invalid fields
+	}
+
+	// Extract this field's partial name
+	partialName := extractName(field.content, "/T")
+
+	// Build full field name (hierarchical)
+	fullName := partialName
+	if parentName != "" && partialName != "" {
+		fullName = parentName + "." + partialName
+	} else if parentName != "" {
+		fullName = parentName
+	}
+
+	// Check if this field has Kids (child fields)
+	kidsIdx := bytes.Index(field.content, []byte("/Kids"))
+	if kidsIdx != -1 {
+		// Parse Kids array
+		kidsArrayStart := bytes.IndexByte(field.content[kidsIdx:], '[')
+		if kidsArrayStart != -1 {
+			kidsArrayStart += kidsIdx
+			kidsArrayEnd := bytes.IndexByte(field.content[kidsArrayStart:], ']')
+			if kidsArrayEnd != -1 {
+				kidsArrayEnd += kidsArrayStart
+				kidsContent := field.content[kidsArrayStart+1 : kidsArrayEnd]
+				kidsRefs := parseReferences(kidsContent)
+
+				// Recursively process each child
+				for _, kidRef := range kidsRefs {
+					t.parseFieldRecursive(kidRef, fullName)
+				}
+			}
+		}
+	}
+
+	// Register this field if it has a name and is a terminal field (has /FT or no Kids)
+	// Fields with /FT are form fields; fields without /FT but with /Kids are just containers
+	hasFT := bytes.Contains(field.content, []byte("/FT"))
+	hasKids := kidsIdx != -1
+
+	if fullName != "" && (hasFT || !hasKids) {
+		t.fields[fullName] = &fieldRef{
 			objNum: field.num,
 			offset: field.offset,
 			length: len(field.content),
 		}
 	}
-
-	return nil
 }
 
 // getObject retrieves a PDF object by its object number.
@@ -393,6 +433,10 @@ func (t *Template) findObjectInXRefStream(objNum int) (int, int, error) {
 
 	entrySize := wVals[0] + wVals[1] + wVals[2]
 
+	// Parse /Index array if present, otherwise default to [0 Size]
+	// /Index array format: [first_obj count first_obj count ...]
+	indexSubsections := t.parseXRefIndex(chunk, objNum)
+
 	// Find and decompress stream
 	streamIdx := bytes.Index(chunk, []byte(">>stream"))
 	if streamIdx == -1 {
@@ -434,9 +478,27 @@ func (t *Template) findObjectInXRefStream(objNum int) (int, int, error) {
 		decompressed = decodePNGPredictor(decompressed, columns)
 	}
 
-	// Look up the object
-	entryOffset := objNum * entrySize
-	if entryOffset+entrySize > len(decompressed) {
+	// Calculate entry offset using /Index subsections
+	entryOffset := -1
+	if len(indexSubsections) > 0 {
+		// Use /Index array to find the correct entry offset
+		currentOffset := 0
+		for i := 0; i < len(indexSubsections); i += 2 {
+			firstObj := indexSubsections[i]
+			count := indexSubsections[i+1]
+			if objNum >= firstObj && objNum < firstObj+count {
+				// Object is in this subsection
+				entryOffset = (currentOffset + (objNum - firstObj)) * entrySize
+				break
+			}
+			currentOffset += count
+		}
+	} else {
+		// No /Index array, assume sequential from 0
+		entryOffset = objNum * entrySize
+	}
+
+	if entryOffset < 0 || entryOffset+entrySize > len(decompressed) {
 		return 0, 0, fmt.Errorf("object %d beyond xref data", objNum)
 	}
 
@@ -474,6 +536,53 @@ func (t *Template) findObjectInXRefStream(objNum int) (int, int, error) {
 	default:
 		return 0, 0, fmt.Errorf("unknown xref entry type %d", typ)
 	}
+}
+
+// parseXRefIndex parses the /Index array from an XRef stream dictionary.
+// Returns pairs of [first_obj, count, first_obj, count, ...].
+// If /Index is not present, returns empty slice (caller should use default [0, Size]).
+func (t *Template) parseXRefIndex(chunk []byte, objNum int) []int {
+	// Look for /Index array
+	indexIdx := bytes.Index(chunk, []byte("/Index"))
+	if indexIdx == -1 {
+		return nil
+	}
+
+	// Find array start
+	arrayStart := indexIdx + 6
+	for arrayStart < len(chunk) && chunk[arrayStart] != '[' {
+		if chunk[arrayStart] == '/' || chunk[arrayStart] == '>' {
+			// Hit another key or end of dict, no /Index array
+			return nil
+		}
+		arrayStart++
+	}
+	if arrayStart >= len(chunk) {
+		return nil
+	}
+	arrayStart++ // Skip '['
+
+	// Parse integers until ']'
+	var vals []int
+	for arrayStart < len(chunk) && chunk[arrayStart] != ']' {
+		if isDigit(chunk[arrayStart]) {
+			val := 0
+			for arrayStart < len(chunk) && isDigit(chunk[arrayStart]) {
+				val = val*10 + int(chunk[arrayStart]-'0')
+				arrayStart++
+			}
+			vals = append(vals, val)
+		} else {
+			arrayStart++
+		}
+	}
+
+	// /Index array should have even number of entries (pairs of first_obj, count)
+	if len(vals)%2 != 0 {
+		return nil
+	}
+
+	return vals
 }
 
 // decodePNGPredictor decodes PNG predictor-encoded data.

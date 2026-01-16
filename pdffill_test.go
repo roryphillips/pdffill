@@ -355,3 +355,105 @@ func TestPDF16XRefStream(t *testing.T) {
 		t.Error("Output doesn't end with EOF marker")
 	}
 }
+
+// TestHierarchicalFieldParsing tests that fields nested in /Kids arrays are correctly parsed.
+// This is a regression test for the issue where 78% of fields were missing because
+// the parser only looked at top-level /Fields and didn't recursively follow /Kids.
+func TestHierarchicalFieldParsing(t *testing.T) {
+	template, err := New(testPDF)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	fields := template.FieldNames()
+
+	// These fields were missing before the fix because they're stored in
+	// compressed object streams and accessed via /Kids arrays
+	requiredFields := []string{
+		"301 Full name",
+		"301 Address Street",
+		"301 Case Number",
+		"301 Date of Injury or Illness",
+		"301 Phone",
+		"301 Completed by",
+	}
+
+	fieldSet := make(map[string]bool)
+	for _, name := range fields {
+		fieldSet[name] = true
+	}
+
+	for _, required := range requiredFields {
+		if !fieldSet[required] {
+			t.Errorf("Required field %q not found (likely /Kids parsing failed)", required)
+		}
+	}
+
+	// The template should have at least 200 fields (203 expected)
+	// Previously only ~45 were found due to missing /Kids support
+	if len(fields) < 200 {
+		t.Errorf("Expected at least 200 fields, got %d (recursive /Kids parsing may have failed)", len(fields))
+	}
+
+	t.Logf("Found %d fields (expected ~203)", len(fields))
+}
+
+// TestCompressedObjectStreamParsing verifies that objects stored in compressed
+// object streams (PDF 1.5+ /Type /ObjStm) can be correctly retrieved.
+func TestCompressedObjectStreamParsing(t *testing.T) {
+	// PDF 1.6 uses XRef streams and may have compressed object streams
+	template, err := New(testPDF16)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	fields := template.FieldNames()
+	if len(fields) == 0 {
+		t.Error("No fields found in PDF 1.6 - object stream parsing may have failed")
+	}
+
+	t.Logf("PDF 1.6 has %d fields", len(fields))
+
+	// Verify we can fill fields (proves objects were properly retrieved)
+	if len(fields) > 0 {
+		formData := map[string]string{
+			fields[0]: "Test Value from Compressed Object Stream",
+		}
+		filled, err := template.Fill(formData)
+		if err != nil {
+			t.Fatalf("Fill() error: %v", err)
+		}
+		if len(filled) == 0 {
+			t.Error("Fill() returned empty result")
+		}
+	}
+}
+
+// TestFieldNameExtraction ensures field names are correctly extracted,
+// including hierarchical names built from parent.child relationships.
+func TestFieldNameExtraction(t *testing.T) {
+	template, err := New(testPDF)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	fields := template.FieldNames()
+	if len(fields) == 0 {
+		t.Fatal("No fields found")
+	}
+
+	// Check that field names are non-empty and don't have issues
+	for _, name := range fields {
+		if name == "" {
+			t.Error("Found empty field name")
+		}
+		// Field names shouldn't start with a dot (malformed hierarchical name)
+		if len(name) > 0 && name[0] == '.' {
+			t.Errorf("Field name starts with dot (malformed): %q", name)
+		}
+		// Field names shouldn't end with a dot
+		if len(name) > 0 && name[len(name)-1] == '.' {
+			t.Errorf("Field name ends with dot (malformed): %q", name)
+		}
+	}
+}

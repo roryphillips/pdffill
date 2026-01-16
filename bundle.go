@@ -73,28 +73,10 @@ func NewBundler() *Bundler {
 }
 
 // EnableCompression enables stream compression for the bundled PDF.
-//
-// When enabled, the bundler will compress stream objects using flate compression,
-// which can significantly reduce file size (typically 60-80% reduction).
-//
-// Compression adds overhead (~50-100ms per form), so only enable it when
-// file size is more important than speed.
-//
-// Example:
-//
-//	bundler := pdffill.NewBundler()
-//	bundler.EnableCompression()
-//	bundler.FillMultiple(template, data1, data2, data3)
-//	compactPDF, err := bundler.Bundle()  // Much smaller file
+// When enabled, streams will be compressed using FlateDecode (zlib) compression.
+// This typically reduces file size by 20-50% at the cost of slightly slower bundling.
 func (b *Bundler) EnableCompression() {
 	b.compress = true
-}
-
-// DisableCompression disables stream compression (default).
-//
-// Use this to prioritize speed over file size.
-func (b *Bundler) DisableCompression() {
-	b.compress = false
 }
 
 // FillMultiple fills a template with multiple form data sets and adds them to the bundle.
