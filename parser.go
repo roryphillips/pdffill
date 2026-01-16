@@ -917,37 +917,64 @@ func extractReference(dict []byte, key string) int {
 
 // extractName extracts a name value from dictionary content.
 func extractName(dict []byte, key string) string {
-	idx := bytes.Index(dict, []byte(key))
-	if idx == -1 {
-		return ""
-	}
+	// Search for the key followed by whitespace or value delimiter
+	// This avoids matching "/T" inside "/FT" when looking for field names
+	searchStart := 0
+	keyBytes := []byte(key)
 
-	// Find the name after the key (either in parentheses or as literal)
-	start := idx + len(key)
-	for start < len(dict) && isWhitespace(dict[start]) {
-		start++
-	}
-
-	if start >= len(dict) {
-		return ""
-	}
-
-	// Check for string literal (...)
-	if dict[start] == '(' {
-		end := bytes.IndexByte(dict[start+1:], ')')
-		if end == -1 {
+	for searchStart < len(dict) {
+		idx := bytes.Index(dict[searchStart:], keyBytes)
+		if idx == -1 {
 			return ""
 		}
-		return string(dict[start+1 : start+1+end])
-	}
+		idx += searchStart
 
-	// Check for hex string <...>
-	if dict[start] == '<' {
-		end := bytes.IndexByte(dict[start+1:], '>')
-		if end == -1 {
+		// Find the position after the key
+		start := idx + len(key)
+
+		// Skip whitespace
+		for start < len(dict) && isWhitespace(dict[start]) {
+			start++
+		}
+
+		if start >= len(dict) {
 			return ""
 		}
-		return decodeHexString(dict[start+1 : start+1+end])
+
+		// Check for string literal (...)
+		if dict[start] == '(' {
+			// Found a valid string value, extract it
+			depth := 1
+			end := start + 1
+			for end < len(dict) && depth > 0 {
+				if dict[end] == '\\' && end+1 < len(dict) {
+					end += 2 // Skip escaped character
+					continue
+				}
+				if dict[end] == '(' {
+					depth++
+				} else if dict[end] == ')' {
+					depth--
+				}
+				end++
+			}
+			if depth == 0 {
+				return string(dict[start+1 : end-1])
+			}
+			return ""
+		}
+
+		// Check for hex string <...>
+		if dict[start] == '<' && (start+1 >= len(dict) || dict[start+1] != '<') {
+			end := bytes.IndexByte(dict[start+1:], '>')
+			if end == -1 {
+				return ""
+			}
+			return decodeHexString(dict[start+1 : start+1+end])
+		}
+
+		// Not a valid value after this key occurrence, continue searching
+		searchStart = idx + 1
 	}
 
 	return ""
