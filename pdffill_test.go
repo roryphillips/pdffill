@@ -429,6 +429,45 @@ func TestCompressedObjectStreamParsing(t *testing.T) {
 	}
 }
 
+// TestObjectStreamFieldFilling verifies that fields stored in compressed object
+// streams can be filled and the value appears in the output PDF.
+// This is a regression test for the issue where filling failed for objects
+// that were stored in ObjStm because rebuildPDF couldn't find them in the PDF body.
+func TestObjectStreamFieldFilling(t *testing.T) {
+	template, err := New(testPDF16)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	fields := template.FieldNames()
+	if len(fields) == 0 {
+		t.Skip("No fields in PDF 1.6")
+	}
+
+	// Use a unique test value that we can search for in the output
+	testValue := "OBJSTM_TEST_VALUE_12345"
+	formData := map[string]string{
+		fields[0]: testValue,
+	}
+
+	filled, err := template.Fill(formData)
+	if err != nil {
+		t.Fatalf("Fill() error: %v", err)
+	}
+
+	// The test value must appear in the output PDF
+	if !bytes.Contains(filled, []byte(testValue)) {
+		t.Errorf("Filled value %q not found in output PDF - object stream filling may have failed", testValue)
+	}
+
+	// Verify the output is a valid PDF
+	if !bytes.HasPrefix(filled, []byte("%PDF-")) {
+		t.Error("Output doesn't have valid PDF header")
+	}
+
+	t.Logf("Successfully filled field from object stream, output size: %d bytes", len(filled))
+}
+
 // TestFieldNameExtraction ensures field names are correctly extracted,
 // including hierarchical names built from parent.child relationships.
 func TestFieldNameExtraction(t *testing.T) {

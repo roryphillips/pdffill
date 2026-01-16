@@ -178,7 +178,8 @@ func (t *Template) addFieldValue(objContent []byte, value string) ([]byte, error
 // rebuildPDF reconstructs the PDF with modified objects.
 func (t *Template) rebuildPDF(replacements map[int][]byte) ([]byte, error) {
 	var buf bytes.Buffer
-	xrefEntries := make(map[int]int) // object number -> offset
+	xrefEntries := make(map[int]int)     // object number -> offset
+	writtenReplacements := make(map[int]bool) // track which replacements were written
 
 	// Write PDF header
 	headerEnd := bytes.IndexByte(t.data, '\n')
@@ -223,6 +224,7 @@ func (t *Template) rebuildPDF(replacements map[int][]byte) ([]byte, error) {
 			buf.WriteString(fmt.Sprintf("%d 0 obj\n", currentObjNum))
 			buf.Write(newContent)
 			buf.WriteString("\nendobj\n")
+			writtenReplacements[currentObjNum] = true
 		} else {
 			// Write original object
 			buf.Write(t.data[numStart:endObjIdx])
@@ -230,6 +232,18 @@ func (t *Template) rebuildPDF(replacements map[int][]byte) ([]byte, error) {
 		}
 
 		pos = endObjIdx
+	}
+
+	// Write any replacement objects that weren't found in the PDF body.
+	// These are objects that were stored in compressed object streams (ObjStm).
+	// We extract them and write them as direct objects in the output PDF.
+	for objNum, content := range replacements {
+		if !writtenReplacements[objNum] {
+			xrefEntries[objNum] = buf.Len()
+			buf.WriteString(fmt.Sprintf("%d 0 obj\n", objNum))
+			buf.Write(content)
+			buf.WriteString("\nendobj\n")
+		}
 	}
 
 	// Write cross-reference table
